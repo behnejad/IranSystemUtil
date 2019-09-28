@@ -47,11 +47,18 @@ public final class IranSystemUtil {
 
             if (t == 48) {
                 temp[temp.length - j++ - 1] = table[16];
+            } else if (t == 66) {
+                temp[temp.length - j++ - 1] = 'ا';
             }
 
             temp[temp.length - j++ - 1] = table[t];
         }
 
         return new String(temp);
+    }
+
+    public static void main(String[] args) {
+        byte[] s = Converter.asciiHexToByte("F2A6FFA695F8FF9CF0F8FF91F0FEF3F2");
+        System.out.println(toUtf8(s, 0, s.length));
     }
 }
