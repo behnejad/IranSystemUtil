@@ -522,7 +522,7 @@ public final class IranSystemUtil {
         currentLetter = letters[0];
 
         if (join_modes[currentLetter][JMR]) {
-            if (join_modes[nextLetter][JMML]) {
+            if (join_modes[previousLetter][JMML]) {
                 res[0] = join_map[currentLetter][JLR];
             } else {
                 res[0] = join_map[currentLetter][JLA];
