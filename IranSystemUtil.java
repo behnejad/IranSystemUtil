@@ -1,3 +1,6 @@
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+
 public final class IranSystemUtil {
     private static final int HAMZE = 0;
     private static final int AA = 1;
@@ -179,8 +182,7 @@ public final class IranSystemUtil {
         // since this class is a utility class so it must be singleton due to memory consumption.
     }
 
-    //    https://www.utf8-chartable.de/unicode-utf8-table.pl?start=1536&number=1024&utf8=-
-    private static int internal_index(int i) {
+    private static int unicode_internal_index(int i) {
         if (i >= 0x660 && i <= 0x669)
             return ZERO + i - 0x660;
 
@@ -455,22 +457,120 @@ public final class IranSystemUtil {
         }
     }
 
-    private static byte[] process_buffer(int[] letters, int length) {
+    private static int w1256_internal_index(int i) {
+        if (i >= 0x30 && i <= 0x39)
+            return ZERO + i - 0x30;
+
+        switch (i) {
+            case 0x2c:
+            case 0x82:
+                return VIRGOOL;
+            case 0x20:
+                return SPACE;
+            case 0x3f:
+            case 0xbf:
+                return QM;
+            case 0xc6:
+            case 0xec:
+            case 0xed:
+                return YE;
+            case 0xc1:
+                return HAMZE;
+            case 0xc2:
+                return AA;
+            case 0xc3:
+            case 0xc5:
+            case 0xc7:
+                return ALEF;
+            case 0xc4:
+                return VAV;
+            case 0xc8:
+                return BE;
+            case 0xc0:
+            case 0xc9:
+                return H;
+            case 0x8a:
+            case 0xca:
+                return TE;
+            case 0xcb:
+                return SE;
+            case 0xcc:
+                return JIM;
+            case 0x8d:
+                return CHE;
+            case 0xcd:
+                return HE;
+            case 0xce:
+                return KHE;
+            case 0x8f:
+            case 0xcf:
+                return DAL;
+            case 0xd0:
+                return ZAL;
+            case 0x9a:
+            case 0xd1:
+                return RE;
+            case 0x8e:
+                return JE;
+            case 0xd2:
+                return ZE;
+            case 0xd3:
+                return SIN;
+            case 0xd4:
+                return SHIN;
+            case 0xd5:
+                return SAD;
+            case 0xd6:
+                return ZAD;
+            case 0xd8:
+                return TA;
+            case 0xd9:
+                return ZA;
+            case 0xda:
+                return EIN;
+            case 0xdb:
+                return GHEIN;
+            case 0x98:
+                return KAF;
+            case 0xdd:
+                return FA;
+            case 0xde:
+                return GHAF;
+            case 0x90:
+                return GAF;
+            case 0xe1:
+                return LAM;
+            case 0xe3:
+                return MIM;
+            case 0xe4:
+                return NOON;
+            case 0x81:
+                return PE;
+            default:
+                return -1;
+        }
+    }
+
+    private boolean get_join_mode(int letter, int align) {
+        return (unicode_internal_index(letter) != -1) && join_modes[letter][align];
+    }
+
+    private static byte[] process_buffer(int[] letters, int offset, int length) {
         byte[] res = new byte[length];
 
         if (length == 1) {
-            res[0] = join_map[letters[0]][JLA];
+            res[0] = join_map[letters[offset]][JLA];
             return res;
         }
 
-        int previousLetter = letters[length - 1];
-        int currentLetter = -1;
-        int nextLetter = letters[0];
+        int previousLetter = letters[offset + length - 1];
+        int currentLetter;
+        int nextLetter;
         boolean start = true;
 
         for (int i = length - 2; i >= 1; --i) {
-            currentLetter = letters[i];
-            nextLetter = letters[i - 1];
+            currentLetter = letters[i + offset];
+            nextLetter = letters[i + offset - 1];
 
             if (start) {
                 if (join_modes[currentLetter][JMML] || join_modes[currentLetter][JMR]) {
@@ -510,7 +610,7 @@ public final class IranSystemUtil {
         }
 
         if (start) { // two letters length
-            currentLetter = letters[1];
+            currentLetter = letters[1 + offset];
 
             if (join_modes[currentLetter][JMML] || join_modes[currentLetter][JMR]) {
                 res[1] = join_map[previousLetter][JLL];
@@ -519,7 +619,7 @@ public final class IranSystemUtil {
             }
         }
 
-        currentLetter = letters[0];
+        currentLetter = letters[offset];
 
         if (join_modes[currentLetter][JMR]) {
             if (join_modes[previousLetter][JMML]) {
@@ -532,6 +632,10 @@ public final class IranSystemUtil {
         }
 
         return res;
+    }
+
+    public static String toString(byte[] data) {
+        return toString(data, 0, data.length);
     }
 
     public static String toString(byte[] data, int offset, int length) {
@@ -555,28 +659,32 @@ public final class IranSystemUtil {
                 continue;
             }
 
-            t = (byte) ((data[i] < 0) ? (128 + data[i]) : data[i]);
+            if (data[i] >= 0) {
+                temp[temp.length - j++ - 1] = (char) data[i];
+            } else {
+                t = (byte) (128 + data[i]);
 
-            if (t < 96 && t >= 48) {
-                temp[temp.length - j++ - 1] = table[79];
-                continue;
+                if (t < 96 && t >= 48) {
+                    temp[temp.length - j++ - 1] = table[79];
+                    continue;
+                }
+
+                if (t >= 96) {
+                    t -= 48;
+                }
+
+                if (t == 66) {
+                    temp[temp.length - j++ - 1] = table[16];
+                }
+
+                temp[temp.length - j++ - 1] = table[t];
             }
-
-            if (t >= 96) {
-                t -= 48;
-            }
-
-            if (t == 66) {
-                temp[temp.length - j++ - 1] = table[16];
-            }
-
-            temp[temp.length - j++ - 1] = table[t];
         }
 
         return new String(temp);
     }
 
-    public static byte[] fromString(String data) {
+    public static byte[] fromString(String data, boolean reverse) {
         int[] letters = new int[data.length()];
         int letters_length = 0;
 
@@ -584,22 +692,20 @@ public final class IranSystemUtil {
         boolean is_last_space = false;
 
         for (int i = 0; i < data.length(); ++i) {
-            letter = internal_index(data.charAt(i));
+            letter = unicode_internal_index(data.charAt(i));
 
             if (letter == -1) {
                 continue;
             }
 
             if (letter == SPACE) {
-                if (is_last_space) {
-                    continue;
-                } else {
+                if (!is_last_space) {
                     is_last_space = true;
                     if (letters_length != 0) {
                         letters[letters_length++] = letter;
                     }
-                    continue;
                 }
+                continue;
             } else {
                 is_last_space = false;
             }
@@ -621,14 +727,61 @@ public final class IranSystemUtil {
             letters[letters_length - i - 1] = t;
         }
 
-        return (letters_length > 0) ? process_buffer(letters, letters_length) : null;
+        return (letters_length > 0) ?
+                (reverse ? reverse(process_buffer(letters, 0, letters_length)) :
+                        process_buffer(letters, 0, letters_length)) : null;
+    }
+
+    public static byte[] fromStringMultiPart(String data, boolean reverse) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        int index = 0;
+        boolean persian = false;
+        for (int i = 0; i < data.length(); ++i) {
+            if (unicode_internal_index(data.charAt(i)) != -1 && data.charAt(i) != ' ') {
+                persian = true;
+            } else {
+                if (persian && i != 0) {
+                    persian = false;
+                    try {
+                        out.write(fromString(data.substring(index, i), !reverse));
+                        index = i;
+                    } catch (IOException e) {
+                    }
+                }
+                out.write(data.charAt(i));
+            }
+        }
+        if (index != data.length() && persian) {
+            try {
+                out.write(fromString(data.substring(index), !reverse));
+            } catch (IOException e) {
+            }
+        }
+        return reverse ? out.toByteArray() : reverse(out.toByteArray());
+    }
+
+    private static byte[] reverse(byte[] a) {
+        if (a == null) {
+            return null;
+        } else {
+            int p1 = 0;
+            int p2 = a.length;
+            byte[] result = new byte[p2];
+
+            while(true) {
+                --p2;
+                if (p2 < 0) {
+                    return result;
+                }
+
+                result[p2] = a[p1++];
+            }
+        }
     }
 
     public static void main(String[] args) {
-//        byte[] s = Converter.asciiHexToByte("F2A6FFA695F8FF9CF0F8FF91F0FEF3F2");
-//        System.out.println(toString(s, 0, s.length));
-        String sample = "لورم ایپسوم متن ساختگی با تولید سادگی نامفهوم از صنعت چاپ و با استفاده از طراحان گرافیک است. چاپگرها و متون بلکه روزنامه و مجله در ستون و سطرآنچنان که لازم است و برای شرایط فعلی تکنولوژی مورد نیاز و کاربردهای متنوع با هدف بهبود ابزارهای کاربردی می باشد. کتابهای زیادی در شصت و سه درصد گذشته، حال و آینده شناخت فراوان جامعه و متخصصان را می طلبد تا با نرم افزارها شناخت بیشتری را برای طراحان رایانه ای علی الخصوص طراحان خلاقی و فرهنگ پیشرو در زبان فارسی ایجاد کرد. در این صورت می توان امید داشت که تمام و دشواری موجود در ارائه راهکارها و شرایط سخت تایپ به پایان رسد وزمان مورد نیاز شامل حروفچینی دستاوردهای اصلی و جوابگوی سوالات پیوسته اهل دنیای موجود طراحی اساسا مورد استفاده قرار گیرد";
-        byte[] res = fromString(sample);
-        System.out.println(toString(res, 0, res.length));
+//        String sample = "لورم ایپسوم متن ساختگی با تولید سادگی نامفهوم از صنعت چاپ و با استفاده از طراحان گرافیک است. چاپگرها و متون بلکه روزنامه و مجله در ستون و سطرآنچنان که لازم است و برای شرایط فعلی تکنولوژی مورد نیاز و کاربردهای متنوع با هدف بهبود ابزارهای کاربردی می باشد. کتابهای زیادی در شصت و سه درصد گذشته، حال و آینده شناخت فراوان جامعه و متخصصان را می طلبد تا با نرم افزارها شناخت بیشتری را برای طراحان رایانه ای علی الخصوص طراحان خلاقی و فرهنگ پیشرو در زبان فارسی ایجاد کرد. در این صورت می توان امید داشت که تمام و دشواری موجود در ارائه راهکارها و شرایط سخت تایپ به پایان رسد وزمان مورد نیاز شامل حروفچینی دستاوردهای اصلی و جوابگوی سوالات پیوسته اهل دنیای موجود طراحی اساسا مورد استفاده قرار گیرد";
+//        byte[] res = fromStringMultiPart(sample, false);
+//        System.out.println(toString(res, 0, res.length));
     }
 }
